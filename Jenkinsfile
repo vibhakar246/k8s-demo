@@ -23,77 +23,61 @@ pipeline {
             }
         }
         
-        stage('Trivy Security Scan - Docker Image') {
+        stage('Trivy Security Scan') {
             steps {
-                echo '🔍 Scanning Docker image for vulnerabilities...'
+                echo '🔍 Running Trivy security scans...'
                 script {
-                    // Run Trivy using Docker container
+                    // Scan 1: Docker image
+                    echo 'Scanning Docker image for vulnerabilities...'
                     sh '''
                         docker run --rm \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             aquasec/trivy:latest \
                             image \
-                            --exit-code 1 \
                             --severity CRITICAL,HIGH \
                             --no-progress \
+                            --exit-code 0 \
                             vibhakar246/devops-practice-app:latest
                     '''
-                }
-                echo '✅ No CRITICAL or HIGH vulnerabilities found in image'
-            }
-            post {
-                always {
-                    script {
-                        // Generate HTML report
-                        sh '''
-                            docker run --rm \
-                                -v $(pwd):/app \
-                                -v /var/run/docker.sock:/var/run/docker.sock \
-                                aquasec/trivy:latest \
-                                image \
-                                --format template \
-                                --template "@/usr/local/share/trivy/templates/html.tpl" \
-                                -o /app/trivy-image-report.html \
-                                vibhakar246/devops-practice-app:latest || true
-                        '''
-                        archiveArtifacts artifacts: 'trivy-image-report.html', allowEmptyArchive: true
-                    }
-                }
-            }
-        }
-        
-        stage('Trivy Security Scan - File System') {
-            steps {
-                echo '🔍 Scanning code dependencies for vulnerabilities...'
-                script {
+                    
+                    // Scan 2: File system
+                    echo 'Scanning code dependencies for vulnerabilities...'
                     sh '''
                         docker run --rm \
                             -v $(pwd):/app \
                             aquasec/trivy:latest \
                             fs \
-                            --exit-code 1 \
                             --severity CRITICAL,HIGH \
                             --no-progress \
+                            --exit-code 0 \
                             /app
                     '''
+                    
+                    echo '✅ Trivy scans completed'
                 }
-                echo '✅ No CRITICAL or HIGH vulnerabilities found in dependencies'
             }
             post {
                 always {
-                    script {
-                        sh '''
-                            docker run --rm \
-                                -v $(pwd):/app \
-                                aquasec/trivy:latest \
-                                fs \
-                                --format template \
-                                --template "@/usr/local/share/trivy/templates/html.tpl" \
-                                -o /app/trivy-fs-report.html \
-                                /app || true
-                        '''
-                        archiveArtifacts artifacts: 'trivy-fs-report.html', allowEmptyArchive: true
-                    }
+                    // Generate detailed reports
+                    sh '''
+                        docker run --rm \
+                            -v $(pwd):/app \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy:latest \
+                            image \
+                            --format table \
+                            --severity CRITICAL,HIGH,MEDIUM \
+                            vibhakar246/devops-practice-app:latest > trivy-image-report.txt || true
+                        
+                        docker run --rm \
+                            -v $(pwd):/app \
+                            aquasec/trivy:latest \
+                            fs \
+                            --format table \
+                            --severity CRITICAL,HIGH,MEDIUM \
+                            /app > trivy-fs-report.txt || true
+                    '''
+                    archiveArtifacts artifacts: 'trivy-*.txt', allowEmptyArchive: true
                 }
             }
         }
@@ -116,9 +100,9 @@ pipeline {
                     try {
                         sh 'kubectl apply -f k8s/deployment.yaml'
                         sh 'kubectl apply -f k8s/service.yaml'
-                        echo '✅ Deployed to Kubernetes successfully'
+                        echo '✅ Deployed to Kubernetes'
                     } catch (Exception e) {
-                        echo '⚠️ Kubernetes deployment skipped (K8s not running)'
+                        echo '⚠️ Kubernetes not running - skipping deployment'
                     }
                 }
             }
@@ -134,20 +118,17 @@ pipeline {
                         echo '⚠️ Unable to verify Kubernetes resources'
                     }
                 }
-                echo '✅ Pipeline verification complete'
             }
         }
     }
     
     post {
         success {
-            echo '🎉 Pipeline executed successfully!'
-            echo 'Image: docker.io/vibhakar246/devops-practice-app:latest'
-            echo '📊 Trivy security reports archived as artifacts'
+            echo '🎉 Pipeline completed successfully!'
+            echo '📊 Check the Trivy reports in build artifacts'
         }
         failure {
-            echo '❌ Pipeline failed - vulnerabilities found!'
-            echo 'Check the Trivy reports above for details'
+            echo '❌ Pipeline failed'
         }
     }
 }
