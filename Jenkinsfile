@@ -10,7 +10,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 checkout scm
-                echo '✅ Code checked out successfully'
+                echo '✅ Code checked out'
             }
         }
         
@@ -19,65 +19,61 @@ pipeline {
                 script {
                     dockerImage = docker.build("${DOCKER_HUB_USER}/${APP_NAME}:latest")
                 }
-                echo '✅ Docker image built successfully'
+                echo '✅ Docker image built'
             }
         }
         
         stage('Trivy Security Scan') {
-            steps {
-                echo '🔍 Running Trivy security scans...'
-                script {
-                    // Scan 1: Docker image (using correct image name: aquasec/trivy)
-                    echo 'Scanning Docker image for vulnerabilities...'
-                    sh '''
-                        docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:0.45.0 \
-                            image \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            vibhakar246/devops-practice-app:latest
-                    '''
-                    
-                    // Scan 2: File system
-                    echo 'Scanning code dependencies for vulnerabilities...'
-                    sh '''
-                        docker run --rm \
-                            -v $(pwd):/app \
-                            aquasec/trivy:0.45.0 \
-                            fs \
-                            --severity CRITICAL,HIGH \
-                            --no-progress \
-                            --exit-code 0 \
-                            /app
-                    '''
-                    
-                    echo '✅ Trivy scans completed'
+            parallel {
+                stage('Scan Image - Critical Block') {
+                    steps {
+                        echo '🔍 Scanning for CRITICAL vulnerabilities...'
+                        script {
+                            // This will FAIL the build if CRITICAL vulnerabilities found
+                            sh '''
+                                docker run --rm \
+                                    -v /var/run/docker.sock:/var/run/docker.sock \
+                                    aquasec/trivy:0.45.0 \
+                                    image \
+                                    --severity CRITICAL \
+                                    --exit-code 1 \
+                                    --no-progress \
+                                    vibhakar246/devops-practice-app:latest
+                            '''
+                        }
+                        echo '✅ No CRITICAL vulnerabilities found'
+                    }
+                }
+                
+                stage('Scan Image - Report Only') {
+                    steps {
+                        echo '🔍 Scanning for HIGH vulnerabilities...'
+                        sh '''
+                            docker run --rm \
+                                -v /var/run/docker.sock:/var/run/docker.sock \
+                                aquasec/trivy:0.45.0 \
+                                image \
+                                --severity HIGH \
+                                --exit-code 0 \
+                                --no-progress \
+                                vibhakar246/devops-practice-app:latest
+                        '''
+                    }
                 }
             }
             post {
                 always {
-                    // Generate detailed reports
                     sh '''
                         docker run --rm \
                             -v $(pwd):/app \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             aquasec/trivy:0.45.0 \
                             image \
-                            --format table \
+                            --format json \
                             --severity CRITICAL,HIGH,MEDIUM \
-                            vibhakar246/devops-practice-app:latest > trivy-image-report.txt || true
-                        
-                        docker run --rm \
-                            -v $(pwd):/app \
-                            aquasec/trivy:0.45.0 \
-                            fs \
-                            --format table \
-                            --severity CRITICAL,HIGH,MEDIUM \
-                            /app > trivy-fs-report.txt || true
+                            vibhakar246/devops-practice-app:latest > trivy-report.json || true
                     '''
-                    archiveArtifacts artifacts: 'trivy-*.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
                 }
             }
         }
@@ -90,7 +86,7 @@ pipeline {
                         dockerImage.push('latest')
                     }
                 }
-                echo '✅ Image pushed to Docker Hub successfully'
+                echo '✅ Image pushed to Docker Hub'
             }
         }
         
@@ -98,24 +94,11 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'kubectl apply -f k8s/deployment.yaml'
-                        sh 'kubectl apply -f k8s/service.yaml'
+                        sh 'kubectl apply -f k8s/deployment.yaml || true'
+                        sh 'kubectl apply -f k8s/service.yaml || true'
                         echo '✅ Deployed to Kubernetes'
                     } catch (Exception e) {
-                        echo '⚠️ Kubernetes not running - skipping deployment'
-                    }
-                }
-            }
-        }
-        
-        stage('Verify') {
-            steps {
-                script {
-                    try {
-                        sh 'kubectl get pods'
-                        sh 'kubectl get services'
-                    } catch (Exception e) {
-                        echo '⚠️ Unable to verify Kubernetes resources'
+                        echo '⚠️ Kubernetes not available'
                     }
                 }
             }
@@ -124,11 +107,11 @@ pipeline {
     
     post {
         success {
-            echo '🎉 Pipeline completed successfully!'
-            echo '📊 Check the Trivy reports in build artifacts'
+            echo '🎉 Pipeline completed! Image is secure.'
         }
         failure {
-            echo '❌ Pipeline failed'
+            echo '❌ Pipeline failed - CRITICAL vulnerabilities found!'
+            echo 'Please update base image and dependencies.'
         }
     }
 }

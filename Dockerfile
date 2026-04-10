@@ -1,10 +1,18 @@
-FROM python:3.9-slim
+# Use a more recent and secure base image
+FROM python:3.11-slim
 
 WORKDIR /app
 
+# Update system packages to fix vulnerabilities
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy requirements first for better caching
 COPY src/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
 COPY src/ .
