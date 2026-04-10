@@ -27,12 +27,12 @@ pipeline {
             steps {
                 echo '🔍 Running Trivy security scans...'
                 script {
-                    // Scan 1: Docker image
+                    // Scan 1: Docker image (using correct image name: aquasec/trivy)
                     echo 'Scanning Docker image for vulnerabilities...'
                     sh '''
                         docker run --rm \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest \
+                            aquasec/trivy:0.45.0 \
                             image \
                             --severity CRITICAL,HIGH \
                             --no-progress \
@@ -45,7 +45,7 @@ pipeline {
                     sh '''
                         docker run --rm \
                             -v $(pwd):/app \
-                            aquasec/trivy:latest \
+                            aquasec/trivy:0.45.0 \
                             fs \
                             --severity CRITICAL,HIGH \
                             --no-progress \
@@ -63,7 +63,7 @@ pipeline {
                         docker run --rm \
                             -v $(pwd):/app \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            aquasec/trivy:latest \
+                            aquasec/trivy:0.45.0 \
                             image \
                             --format table \
                             --severity CRITICAL,HIGH,MEDIUM \
@@ -71,7 +71,7 @@ pipeline {
                         
                         docker run --rm \
                             -v $(pwd):/app \
-                            aquasec/trivy:latest \
+                            aquasec/trivy:0.45.0 \
                             fs \
                             --format table \
                             --severity CRITICAL,HIGH,MEDIUM \
