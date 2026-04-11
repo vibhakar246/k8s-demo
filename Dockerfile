@@ -1,5 +1,5 @@
 # Use Ubuntu LTS (Long Term Support) - more stable and regularly patched
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Set environment variables to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
