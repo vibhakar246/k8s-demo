@@ -24,13 +24,7 @@ COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ .
 
-# Check for existing user and create if doesn't exist
-RUN if ! id -u appuser > /dev/null 2>&1; then \
-        useradd -m -u 1000 appuser; \
-    else \
-        useradd -m appuser; \
-    fi && \
-    chown -R appuser:appuser /app
-
+# Create user without specifying UID - let system assign one
+RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 CMD ["python", "app.py"]
