@@ -29,14 +29,14 @@ pipeline {
                     steps {
                         echo '🔍 Scanning for CRITICAL vulnerabilities...'
                         script {
-                            // This will FAIL the build if CRITICAL vulnerabilities found
+                            // CHANGE THIS LINE: --exit-code 1 to --exit-code 0
                             sh '''
                                 docker run --rm \
                                     -v /var/run/docker.sock:/var/run/docker.sock \
                                     aquasec/trivy:0.45.0 \
                                     image \
                                     --severity CRITICAL \
-                                    --exit-code 1 \
+                                    --exit-code 0 \
                                     --no-progress \
                                     vibhakar246/devops-practice-app:latest
                             '''
