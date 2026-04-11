@@ -15,16 +15,16 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment with Python 3.11
+# Create virtual environment
 RUN python3.11 -m venv /opt/venv
-
-# Activate virtual environment for all subsequent RUN commands
 ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ .
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
+# Use UID 1001 instead of 1000
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
 USER appuser
 CMD ["python", "app.py"]
